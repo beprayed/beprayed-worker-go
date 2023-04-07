@@ -2,10 +2,12 @@ package worker
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"beprayed-worker-go/logger"
 	m "beprayed-worker-go/model"
 
 	"github.com/nats-io/nats.go"
@@ -19,7 +21,13 @@ var js nats.JetStreamContext
 // 1. insert pray record into record
 // 2. increment the prayer's count
 func StartPrayerWorker() {
-	nc, _ := nats.Connect(os.Getenv("NATS_HOST"))
+	fmt.Println("NATS_HOST: ", os.Getenv("NATS_HOST"))
+	fmt.Println("Starting the prayer worker...")
+	nc, err := nats.Connect(os.Getenv("NATS_HOST"))
+	if err != nil {
+		panic(err)
+	}
+
 	js, _ = nc.JetStream()
 
 	sub, err := js.SubscribeSync("Pray.*", nats.Durable("pray-worker"), nats.MaxDeliver(3))
@@ -38,13 +46,13 @@ func StartPrayerWorker() {
 		log.Println("Received a message: ", string(msg.Data))
 		var record m.PrayRecord
 		if err := json.Unmarshal(msg.Data, &record); err != nil {
-			log.Fatalf("Error decoding message: %v", err)
+			logger.Error("Error decoding message: %v", err)
 		}
 
 		var ph m.PrayRecordModel
 
 		if err := ph.Insert(record); err != nil {
-			log.Fatalf("Error inserting pray record: %v", err)
+			logger.Error("Error inserting pray record: %v", err)
 		}
 
 		msg.Ack()
